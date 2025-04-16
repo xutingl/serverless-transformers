@@ -24,6 +24,9 @@ import torch
 import torch.utils.checkpoint
 from torch import nn
 
+from safetensors.torch import save_file
+import time
+
 from ...activations import ACT2FN
 from ...cache_utils import Cache, DynamicCache, StaticCache
 from ...generation import GenerationMixin
@@ -844,6 +847,12 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         loss = None
         if labels is not None:
             loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size, **kwargs)
+
+        start = time.time()
+        torch.save(outputs.past_key_values, "/home/xutingl/serverless/disagg-serverless/saved_kvcache/kvcache.pt")
+        # save_file(outputs.past_key_values, "/home/xutingl/serverless/disagg-serverless/saved_kvcache/kvcache.safetensors")
+        end = time.time()
+        print(f"Save past_key_values Time: {end - start}")
 
         return CausalLMOutputWithPast(
             loss=loss,
