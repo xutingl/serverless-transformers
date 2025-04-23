@@ -532,6 +532,8 @@ class LlamaModel(LlamaPreTrainedModel):
         # TODO (joao): remove this exception in v4.56 -- it exists for users that try to pass a legacy cache
         if not isinstance(past_key_values, (type(None), Cache)):
             raise ValueError("The `past_key_values` should be either a `Cache` object or `None`.")
+        
+        # print(f"Number of tokens: {len(input_ids[0])}")
 
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
@@ -750,6 +752,8 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         self.vocab_size = config.vocab_size
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
+        self.save_kv_cache = False
+
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -848,11 +852,12 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         if labels is not None:
             loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size, **kwargs)
 
-        start = time.time()
-        torch.save(outputs.past_key_values, "/home/xutingl/serverless/disagg-serverless/saved_kvcache/kvcache.pt")
-        # save_file(outputs.past_key_values, "/home/xutingl/serverless/disagg-serverless/saved_kvcache/kvcache.safetensors")
-        end = time.time()
-        print(f"Save past_key_values Time: {end - start}")
+        if self.save_kv_cache:
+            start = time.time()
+            torch.save(outputs.past_key_values, "/home/xutingl/serverless/disagg-serverless/saved_kvcache/kvcache.pt")
+            # save_file(outputs.past_key_values, "/home/xutingl/serverless/disagg-serverless/saved_kvcache/kvcache.safetensors")
+            end = time.time()
+            print(f"Save past_key_values Time: {end - start}")
 
         return CausalLMOutputWithPast(
             loss=loss,
