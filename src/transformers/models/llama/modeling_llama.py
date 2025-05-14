@@ -536,6 +536,9 @@ class LlamaModel(LlamaPreTrainedModel):
         # print(f"Number of tokens: {len(input_ids[0])}")
 
         if inputs_embeds is None:
+            # print(f"[DEBUG] input_ids min: {input_ids.min()}, max: {input_ids.max()}, vocab_size: {self.embed_tokens.num_embeddings}")
+            # [TODO] Sometimes the input_ids are not in the range of the vocab size (NOT EXPECTED), so we need to clamp them
+            input_ids = torch.clamp(input_ids, max=self.embed_tokens.num_embeddings - 1)
             inputs_embeds = self.embed_tokens(input_ids)
 
         if use_cache and past_key_values is None:
@@ -752,7 +755,7 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         self.vocab_size = config.vocab_size
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
-        self.save_kv_cache = False
+        self.save_kv_cache = False # !!!![HardCoded] manually set to True for prefill and False for decoding
 
         # Initialize weights and apply final processing
         self.post_init()
