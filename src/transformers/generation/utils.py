@@ -406,7 +406,9 @@ class GenerationMixin:
             inputs_embeds is not None  # Exception 1
             or (cache_position[-1] >= input_ids.shape[1])  # Exception 3
         ):
+            #print(f"[_cache_dependant_input_preparation] input_ids before: {input_ids}")
             input_ids = input_ids[:, -cache_position.shape[0] :]
+            #print(f"[_cache_dependant_input_preparation] input_ids after: {input_ids}")
         elif input_ids.shape[1] != cache_position.shape[0]:  # Default case (the "else", a no op, is Exception 2)
             input_ids = input_ids[:, cache_position]
         return inputs_embeds, input_ids
@@ -490,6 +492,8 @@ class GenerationMixin:
         requirements for e.g. `past_key_values`). This function should work as is for most LLMs.
         """
 
+        # print(f"[prepare_inputs_for_generation] cache_position: {cache_position}")
+
         # 1. Handle BC:
         model_inputs = {}
         # - some models don't have `Cache` support (which implies they don't expect `cache_position` in `forward`)
@@ -501,6 +505,8 @@ class GenerationMixin:
         elif cache_position is None:
             past_length = past_key_values[0][0].shape[2] if past_key_values is not None else 0
             cache_position = torch.arange(past_length, input_ids.shape[1], dtype=torch.long, device=input_ids.device)
+        
+        # print(f"[prepare_inputs_for_generation] cache_position: {cache_position}")
 
         # 2. Generic cache-dependent input preparation
         if past_key_values is not None:
@@ -1707,6 +1713,9 @@ class GenerationMixin:
     def _get_initial_cache_position(self, input_ids, model_kwargs):
         """Calculates `cache_position` for the pre-fill stage based on `input_ids` and optionally past length"""
         # `torch.compile`-friendly `torch.arange` from a shape -- the lines below are equivalent to `torch.arange`
+        if 'cache_position' in model_kwargs:
+            print(f"[get_initial_cache_position] cache_position: {model_kwargs['cache_position']}")
+            return model_kwargs
         if "inputs_embeds" in model_kwargs and not self.config.is_encoder_decoder:
             cache_position = torch.ones_like(model_kwargs["inputs_embeds"][0, :, 0], dtype=torch.int64).cumsum(0) - 1
         elif "decoder_inputs_embeds" in model_kwargs and self.config.is_encoder_decoder:
