@@ -62,6 +62,7 @@ if is_torch_flex_attn_available():
 
 from ...integrations import use_kernel_forward_from_hub
 
+import traceback
 
 logger = logging.get_logger(__name__)
 
@@ -514,6 +515,8 @@ LLAMA_INPUTS_DOCSTRING = r"""
             the complete sequence length.
 """
 
+def empty_layer_callback(idx, cache):
+    pass
 
 @add_start_docstrings(
     "The bare LLaMA Model outputting raw hidden-states without any specific head on top.",
@@ -547,6 +550,8 @@ class LlamaModel(LlamaPreTrainedModel):
 
         # Initialize weights and apply final processing
         self.post_init()
+
+        self.layer_callback = empty_layer_callback
 
     def get_input_embeddings(self):
         return self.embed_tokens
@@ -639,7 +644,7 @@ class LlamaModel(LlamaPreTrainedModel):
         all_hidden_states = () if output_hidden_states else None
         all_self_attns = () if output_attentions else None
 
-        for decoder_layer in self.layers[: self.config.num_hidden_layers]:
+        for layer_idx, decoder_layer in enumerate(self.layers[: self.config.num_hidden_layers]):
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
 
@@ -667,6 +672,7 @@ class LlamaModel(LlamaPreTrainedModel):
                     position_embeddings=position_embeddings,
                     **flash_attn_kwargs,
                 )
+                self.layer_callback(layer_idx, past_key_values)
 
             hidden_states = layer_outputs[0]
 
@@ -845,6 +851,7 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
 
         self.save_kv_cache = False  # !!!![HardCoded] manually set to True for prefill and False for decoding
 
+        self.layer_callback = empty_layer_callback
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -929,6 +936,7 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         )
 
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
+        self.model.layer_callback = self.layer_callback
         outputs: BaseModelOutputWithPast = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -960,6 +968,8 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
                 **kwargs,
             )
 
+        # for line in traceback.format_stack():
+        #    print(line.strip())
         if self.save_kv_cache:
             start = time.time()
             torch.save(outputs.past_key_values, "./saved_kvcache/kvcache.pt")
