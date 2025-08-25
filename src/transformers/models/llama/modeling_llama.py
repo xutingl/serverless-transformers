@@ -515,8 +515,6 @@ LLAMA_INPUTS_DOCSTRING = r"""
             the complete sequence length.
 """
 
-def empty_layer_callback(idx, cache):
-    pass
 
 @add_start_docstrings(
     "The bare LLaMA Model outputting raw hidden-states without any specific head on top.",
@@ -551,13 +549,19 @@ class LlamaModel(LlamaPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-        self.layer_callback = empty_layer_callback
+        self.reset_layer_callback()
 
     def get_input_embeddings(self):
         return self.embed_tokens
 
     def set_input_embeddings(self, value):
         self.embed_tokens = value
+
+    def set_layer_callback(self, layer_callback):
+        self.layer_callback = layer_callback
+    
+    def reset_layer_callback(self):
+        self.layer_callback = lambda idx, cache: None
 
     @can_return_tuple
     @add_start_docstrings_to_model_forward(LLAMA_INPUTS_DOCSTRING)
@@ -851,7 +855,6 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
 
         self.save_kv_cache = False  # !!!![HardCoded] manually set to True for prefill and False for decoding
 
-        self.layer_callback = empty_layer_callback
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -872,6 +875,12 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
 
     def get_decoder(self):
         return self.model
+
+    def set_layer_callback(self, layer_callback):
+        self.model.set_layer_callback(layer_callback)
+    
+    def reset_layer_callback(self):
+        self.model.reset_layer_callback()
 
     @can_return_tuple
     @add_start_docstrings_to_model_forward(LLAMA_INPUTS_DOCSTRING)
@@ -936,7 +945,6 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         )
 
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
-        self.model.layer_callback = self.layer_callback
         outputs: BaseModelOutputWithPast = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -968,8 +976,6 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
                 **kwargs,
             )
 
-        # for line in traceback.format_stack():
-        #    print(line.strip())
         if self.save_kv_cache:
             start = time.time()
             torch.save(outputs.past_key_values, "./saved_kvcache/kvcache.pt")
